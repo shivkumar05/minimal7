@@ -21,7 +21,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import GenericAPIView
 import uuid
 import boto3
-
+from django_filters.rest_framework import DjangoFilterBackend,OrderingFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -64,7 +65,7 @@ class Login(APIView):
         if user:
             login(request, user)
             refresh = RefreshToken.for_user(user)
-            return Response( {'refresh': str(refresh),'access': str(refresh.access_token),'message':"login successfully"})
+            return Response( {'user':str(user.id),'refresh': str(refresh),'access': str(refresh.access_token),'message':"login successfully"})
         return response.Response({'message': "Invalid credentials, try again"}, status=status.HTTP_401_UNAUTHORIZED)
  
 
@@ -117,7 +118,7 @@ class User_Post(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
-    def post(self, request, *args, **kwargs):
+    def post(self, request,*args, **kwargs):
         file_serializer = User_Post_serializer(data=request.data)
         if file_serializer.is_valid():
             file_serializer.save()
@@ -132,15 +133,13 @@ class User_Post(APIView):
             return Response(file_serializer.data, status=status.HTTP_201_CREATED)
         else:
             return Response(file_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 #view post Api with this we can see different User's posts
 
 class Post_view(generics.ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
-    queryset = Post.objects.all()
+    queryset = Post.objects.filter(is_approved=True).order_by('-created_date')
     serializer_class = User_Post_serializer
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -148,10 +147,11 @@ class Post_view_user(generics.ListAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = User_Post_serializer
-    def get(self , request):
-        accounts = Post.objects.filter(user = request.user) 
+    def get(request):
+        accounts = Post.objects.order_by('-created_date')
         serializer =User_Post_serializer(accounts , many = True) 
-        return Response(serializer.data) 
+        return Response(serializer.data)
+         
 
 @method_decorator(csrf_exempt, name='dispatch')
 class Post_update(APIView):
@@ -339,26 +339,7 @@ class User_Profile_pic_Update(APIView):
         return Response("edit successfully " )          
       else:
         return Response(serializer.errors)  
-    # def get(self,request):  
-    #   try:              
-    #     ac = Profile_Pic.objects.get(user =request.user)
-    #   except Profile_Pic.DoesNotExist:
-    #     return Response(status=404)   
-    #   serializer = Profile_Pic_serializer(ac) 
-    #   return Response(serializer.data)
-    # def put(self,request ): 
-    #     try:              
-    #         ac = Profile_Pic.objects.get(user =request.user)
-    #     except Profile_Pic.DoesNotExist:
-    #        return Response(status=404)  
-    #     serializer =Profile_Pic_serializer(ac , data = request.data )   
-    #     if  serializer.is_valid():
-    #         serializer.save()
-    #         return response.Response({'message': "Your profile pic update successfully"},status=status.HTTP_205_RESET_CONTENT)       
-    #     else:
-    #         return Response(serializer.errors) 
-
-# Like_Post with this API user can like posts of other users
+   
 @csrf_exempt
 def Like_Post(request,id):
     post = Post.objects.filter(id = id)
@@ -370,23 +351,64 @@ def Like_Post(request,id):
 
 
 # User_Comment with this API user can comment on other user's post 
-@method_decorator(csrf_exempt, name='dispatch')
-class User_Comment(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
-    def get(self,request,*args,**kwargs):
-        snippets = Comment.objects.all()
-        serializer = Comment_serializer(snippets, many=True)
-        return Response(serializer.data)
+class CommentsViewSet(APIView):
+    def get(self, request):
+        com = Comments.objects.all()
+        serializer = CommentsSerializer(com , many = True)
+        return Response(serializer.data)  
+    def post(self , request):
+      
+      file_serializer = CommentsSerializer(data=request.data) 
+      if file_serializer.is_valid():
+        file_serializer.save()
+        ddb = boto3.resource('dynamodb', 
+                     aws_access_key_id='AKIA6GFBKQFECVUSCAHY', 
+                     aws_secret_access_key='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',
+                     region_name ='us-west-2')
+        table = ddb.Table('Comments')
+        table.put_item(
+            Item=file_serializer.data
+            ) 
+        return Response(file_serializer.data)
+      return response.Response(file_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def post(self, request, *args, **kwargs):
-        serializer = Comment_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        
+@api_view(['DELETE'])
+def Comments_delete(request,pk):
+      x = Comments.objects.get(cid = pk)
+      x.delete()
+      return Response("Comments is successfully delete")
+
+# User_replay with this API user can comment on other user's post
+class ReplyViewSet(APIView):
+    def get(self, request):
+       if request.method =='GET':
+        social = Reply.objects.all()
+        serializer = ReplySerializer(social , many = True)
+        return Response(serializer.data) 
+    def post(self , request) :
+      file_serializer = ReplySerializer(data=request.data) 
+      if file_serializer.is_valid():              
+        file_serializer.save()
+        ddb = boto3.resource('dynamodb', 
+                     aws_access_key_id='AKIA6GFBKQFECVUSCAHY', 
+                     aws_secret_access_key='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',
+                     region_name ='us-west-2')
+        table = ddb.Table('Reply')
+        table.put_item(
+            Item=file_serializer.data
+            ) 
+        return Response(file_serializer.data)
+      return response.Response(file_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+  
+        
+@api_view(['DELETE'])
+def reply_delete(request,pk):
+      x = Reply.objects.filter(field_name=id)
+      x.delete()
+      return Response("Reply  is successfully delete")
 
 
 # PostDetail with this API user can see Detailed view of any Post
@@ -411,9 +433,17 @@ class BlogPost(APIView):
         serializer = BlogSerializer(data=request.data) 
         if serializer.is_valid():              
             serializer.save()  
+            ddb = boto3.resource('dynamodb', 
+                     aws_access_key_id='AKIA6GFBKQFECVUSCAHY', 
+                     aws_secret_access_key='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',
+                     region_name ='us-west-2')
+            table = ddb.Table('Blog')
+            table.put_item(
+            Item=serializer.data
+            ) 
             return Response(serializer.data)  
         else:
-            return Response(serializer.errors)  
+            return response.Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)  
   
 
 # Blog viewset with this API user can edit their blogs 
@@ -432,7 +462,7 @@ class Blog_update(APIView):
         blog = Blog.objects.get(id=pk)
         serializer = BlogSerializer(instance=blog, data =request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save() 
         return response.Response({'message': "Your blog update successfully"},status=status.HTTP_205_RESET_CONTENT)
 
 
@@ -457,6 +487,26 @@ class Blog_delete(APIView):
             return Response("blog does not excite")   
 
 
+@api_view(['GET'])
+def show(request,pk):
+      if request.method =='GET':
+        user = CustomUser.objects.filter(pk=pk)
+        serializer = RegisterSerializer(user,many=True)
+        return Response(serializer.data)
 
 
+@api_view(['GET'])
+def video(request,pk):
+      if request.method =='GET':
+        user = Video.objects.filter(pk=pk)
+        serializer = Videoserializer(user,many=True)
+        return Response(serializer.data)
+       
+@api_view(['GET'])
+def View_all_Posts(request):
+      if request.method =='GET':
+        post = Post.objects.filter(is_approved=True).order_by('-created_date')
+        serializer = User_Post_serializer(post,many=True)
+        return Response(serializer.data)
+              
 #https://github.com/CryceTruly/django-rest-api/tree/main/authentication

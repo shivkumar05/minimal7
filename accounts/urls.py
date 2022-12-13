@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import (
 from accounts.views import *
 from . import views
 urlpatterns = [
+    
     path('login/', Login.as_view(), name="login"),
     path('register/', Register.as_view(), name="Register"),
     path('forget_password/',Forget_password.as_view(), name="forget_password"),
@@ -24,7 +25,10 @@ urlpatterns = [
     path('user_profile_pic/', User_Profile_Pic.as_view(),name='user_profile_pic'),
     path('user_profile_pic_update/<int:pk>/',User_Profile_pic_Update.as_view(),name='User_Profile_Pic_Update'),
     path('like/<int:id>/',views.Like_Post,name='like_post'),
-    path('user_comment/',User_Comment.as_view(),name='user_comment'),
+    path('Comments/', CommentsViewSet.as_view()),
+    path('Comments_delete/<int:pk>/',views.Comments_delete, name='Comments_delete'),
+    path('reply/', ReplyViewSet.as_view()),
+    path('reply_delete/<int:pk>/', views.reply_delete, name='reply_delete'),
     path('postdetail/<int:pk>/',PostDetail.as_view(),name='PostDetail'),
     path('create_blog/',BlogPost.as_view(),name='blog'),
     path('blog_view/',Blog_view.as_view(),name='blog_view'),
@@ -32,4 +36,7 @@ urlpatterns = [
     path('blog_delete/<int:pk>/',Blog_delete.as_view(),name='blog_delete'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('show/<int:pk>/',views.show,name='show'),
+    path('video/<int:pk>/',views.video,name='video'),
+    path('view_all_posts/',views.View_all_Posts,name='post')
 ]
