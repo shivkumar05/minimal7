@@ -65,7 +65,7 @@ class Login(APIView):
         if user:
             login(request, user)
             refresh = RefreshToken.for_user(user)
-            return Response( {'user':str(user.id),'refresh': str(refresh),'access': str(refresh.access_token),'message':"login successfully"})
+            return Response( {'id':str(user.id),'refresh': str(refresh),'access': str(refresh.access_token),'message':"login successfully"})
         return response.Response({'message': "Invalid credentials, try again"}, status=status.HTTP_401_UNAUTHORIZED)
  
 
@@ -143,12 +143,12 @@ class Post_view(generics.ListCreateAPIView):
     serializer_class = User_Post_serializer
 
 @method_decorator(csrf_exempt, name='dispatch')
-class Post_view_user(generics.ListAPIView):
+class Post_view_user(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = User_Post_serializer
-    def get(request):
-        accounts = Post.objects.order_by('-created_date')
+    def get(self,request):
+        accounts = Post.objects.filter(user = request.user).order_by('-created_date')
         serializer =User_Post_serializer(accounts , many = True) 
         return Response(serializer.data)
          
@@ -417,10 +417,10 @@ class PostDetail(APIView):
     permission_classes = [IsAuthenticated]
     def get(self,request,pk):  
       try:              
-        ac = Profile_Pic.objects.get(pk=pk)
-      except Profile_Pic.DoesNotExist:
+        ac = Post.objects.get(pk=pk)
+      except Post.DoesNotExist:
         return Response(status=404)   
-      serializer = Profile_Pic_serializer(ac) 
+      serializer = User_Post_serializer(ac) 
       return Response(serializer.data)
 
 # Blog viewset with this API user can post their blogs 
